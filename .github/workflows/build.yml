@@ -1,4 +1,4 @@
-name: Build Florida (Undetected Frida)
+name: Build Florida
 on:
   workflow_dispatch:
 
@@ -15,30 +15,23 @@ jobs:
         with:
           submodules: true
 
-      - name: Node 18
-        uses: actions/setup-node@v5
-        with:
-          node-version: 18
-
-      - name: Python 3.11
+      - name: Setup Python 3.11
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev flex bison xz-utils
-          pip3 install -U setuptools lief
+          sudo apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32z-dev flex bison xz-utils
 
-      - name: Build
+      - name: Build Undetected Frida (Florida)
         run: |
-          cd frida
           ./configure --host=${{ matrix.os }}-${{ matrix.arch }} --enable-server
           make
 
-      - name: Upload
+      - name: Upload frida-server
         uses: actions/upload-artifact@v5
         with:
-          name: server-${{ matrix.arch }}
-          path: frida/build/subprojects/frida-core/server/frida-server
+          name: florida-server-${{ matrix.arch }}
+          path: build/subprojects/frida-core/server/frida-server
