@@ -1,0 +1,43 @@
+name: Build Florida Frida (过检测版)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 下载 Frida 源码
+        uses: actions/checkout@v4
+        with:
+          repository: frida/frida
+          ref: 17.7.0
+          submodules: true
+
+      - name: 下载 Florida 补丁
+        uses: actions/checkout@v4
+        with:
+          repository: Ylarod/Florida
+          path: florida-patch
+
+      - name: 应用补丁（覆盖修改）
+        run: |
+          cp -rf florida-patch/frida-core/* frida-core/
+          cp -rf florida-patch/src/* src/
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential meson ninja-build python3-pip
+          pip install pyparsing
+
+      - name: 开始编译 Android arm64
+        run: |
+          ./build.py -f android arm64
+
+      - name: 上传成品
+        uses: actions/upload-artifact@v4
+        with:
+          name: florida-server-arm64
+          path: build/frida-android-arm64/bin/frida-server
