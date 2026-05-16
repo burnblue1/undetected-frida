@@ -37,8 +37,8 @@ jobs:
     - name: Install dependencies
       run: |
         [ $(id -u) -eq 0 ] || SUDO=sudo
-        ${SUDO} apt-get update && DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev flex bison libc6-dev libc6-dev-i386 xz-utils plzip zstd pigz gettext-base
-        ${SUDO} /opt/hosttoolcache/Python/3.11.*/x64/bin/pip3 install -U setuptools lief
+        ${SUDO} apt-get update && DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev flex bison libc6-dev libc6-dev-i386 xz-utils
+        pip3 install -U setuptools lief
 
     - name: Build Frida
       run: |
@@ -55,7 +55,7 @@ jobs:
             popd
           done
         done
-        ./configure --prefix="${PWD}/build" --host="${{ matrix.os }}-${{ matrix.arch }}" --enable-server
+        ./configure --host="${{ matrix.os }}-${{ matrix.arch }}" --enable-server
         make
 
     - name: Upload artifact
