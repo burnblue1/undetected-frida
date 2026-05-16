@@ -1,4 +1,4 @@
-name: Build Florida Frida Server
+name: Build Florida (x86_64)
 
 on:
   workflow_dispatch:
@@ -8,36 +8,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Frida
+      - name: Clone Frida
         uses: actions/checkout@v4
         with:
           repository: frida/frida
           ref: 17.7.0
-          submodules: true
+          submodules: recursive
 
-      - name: Checkout Florida Patch
+      - name: Clone Florida Patch
         uses: actions/checkout@v4
         with:
           repository: Ylarod/Florida
-          path: florida
+          path: patch/Florida
 
-      - name: Apply Florida Patch
+      - name: Apply Patch
         run: |
-          cp -n florida/frida-core/* frida-core/ 2>/dev/null || true
-          cp -n florida/src/* src/ 2>/dev/null || true
+          cp -rf patch/Florida/frida-core/* frida-core/ 2>/dev/null || :
+          cp -rf patch/Florida/src/* src/ 2>/dev/null || :
 
-      - name: Setup Environment
+      - name: Install Deps
         run: |
           sudo apt update
           sudo apt install -y build-essential meson ninja-build python3-pip
           pip3 install pyparsing
 
-      - name: Build Android arm64
+      # 重点：编译 x86_64 版本（电脑模拟器）
+      - name: Build for android x86_64
         run: |
-          python3 build.py --full --android arm64
+          python3 build.py -f android x86_64
 
-      - name: Upload Artifact
+      - name: Upload Final Server
         uses: actions/upload-artifact@v4
         with:
-          name: florida-server-arm64
-          path: build/frida-android-arm64/bin/frida-server
+          name: florida-server-x86_64
+          path: build/frida-android-x86_64/bin/frida-server
