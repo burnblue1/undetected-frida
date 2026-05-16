@@ -1,4 +1,4 @@
-name: undetected-frida
+name: Build Florida (Undetected Frida)
 on:
   workflow_dispatch:
 
@@ -15,46 +15,44 @@ jobs:
       with:
         submodules: true
 
-    - name: Force NDK 29
-      run: |
-        echo "ANDROID_NDK_VERSION=29.0.14206865" >> $GITHUB_ENV
-        echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
-
-    - name: Setup NDK 29
+    - name: Install NDK r29
       uses: nttld/setup-ndk@v1
       with:
         ndk-version: r29
-        local-cache: true
 
     - name: Setup Python 3.11
       uses: actions/setup-python@v6
       with:
         python-version: '3.11'
 
-    - name: Install deps
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev flex bison
+        sudo apt update
+        sudo apt install -y build-essential gcc-multilib g++-multilib ninja-build flex bison
 
-    - name: Build
+    - name: Build Frida with Florida
       run: |
-        git clone --recurse-submodules https://github.com/frida/frida.git -b 17.9.10
+        git clone --recurse-submodules https://github.com/frida/frida -b 17.9.10
         cd frida
-        
-        for patch_dir in ../florida ../strongR-frida; do
-          for module in $patch_dir/*; do
-            if [ -d "$module" ] && [ -d "subprojects/$(basename $module)" ]; then
-              cd subprojects/$(basename $module)
+
+        # 打 Florida 补丁
+        for dir in ../florida ../strongR-frida; do
+          for module in $dir/*; do
+            mod=$(basename $module)
+            if [ -d "subprojects/$mod" ]; then
+              cd subprojects/$mod
               for p in $module/*.patch; do
                 patch -Np1 < $p || true
               done
               cd ../..
             fi
+          done
         done
-        
+
+        # 官方编译脚本（自动用 NDK r29）
         python3 releng/build.py --os ${{ matrix.os }} --arch ${{ matrix.arch }}
 
-    - name: Upload
+    - name: Upload frida-server
       uses: actions/upload-artifact@v5
       with:
         name: florida-server-${{ matrix.arch }}
