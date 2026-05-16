@@ -29,10 +29,10 @@ jobs:
         java-version: "8"
         distribution: temurin
 
-    - name: Python 3.14 setup
+    - name: Python 3.11 setup
       uses: actions/setup-python@v6
       with:
-        python-version: '3.14'
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
