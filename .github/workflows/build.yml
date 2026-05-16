@@ -6,45 +6,59 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - arm64
+        os:
+          - android
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Node 18 setup
+        uses: actions/setup-node@v5
+        with:
+          node-version: 18
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y build-essential gcc-multilib lib32z1 git curl flex bison libc6-dev libc6-dev-i386
+      - name: JDK 8 setup
+        uses: actions/setup-java@v5
+        with:
+          java-version: "8"
+          distribution: temurin
 
-    - name: Clone Frida source
-      run: |
-        git clone --recurse-submodules https://github.com/frida/frida frida
-        cd frida
-        git checkout 17.9.10
+      - name: Python 3.14 setup
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
 
-    - name: Apply Florida patches
-      run: |
-        git clone https://github.com/zer0def/undetected-frida.git patches
-        for k in patches/florida patches/strongR-frida; do
-          for i in $k/*; do
-            pushd frida/subprojects/${i##*/}
-            for j in ../../../../$k/${i##*/}/*.patch; do
-              patch -Np1 < $j
-            done
-            popd
-          done
-        done
+      - name: NDK 29 setup
+        run: |
+          curl -sSLO https://dl.google.com/android/repository/android-ndk-r29-linux.zip
+          unzip -qo android-ndk-r29-linux.zip; rm android-ndk-r29-linux.zip; [ $(id -u) -eq 0 ] || SUDO=sudo
+          export ANDROID_NDK="${ANDROID_NDK:-/usr/local/lib/android/sdk/ndk/29.0.14206865}"
+          ${SUDO} /bin/sh -ec "rm -rf '${ANDROID_NDK%/*}/29.0.14206865'; mkdir -p '${ANDROID_NDK%/*}'; mv -v android-ndk-r29 '${ANDROID_NDK%/*}/29.0.14206865'"; export ANDROID_NDK="${ANDROID_NDK%/*}/29.0.14206865"
+          export ANDROID_NDK_HOME="${ANDROID_NDK}" ANDROID_NDK_ROOT="${ANDROID_NDK}"
 
-    - name: Build Android x86_64
-      run: |
-        cd frida
-        python3 releng/build.py --os android --arch x86_64
+      - name: Install dependencies
+        run: |
+          [ $(id -u) -eq 0 ] || SUDO=sudo
+          ${SUDO} apt-get update && DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev flex bison libc6-dev libc6-dev-i386 xz-utils
+          ${SUDO} /opt/hostedtoolcache/Python/3.11.*/x64/bin/pip3 install -U setuptools lief
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: florida-server-x86_64
-        path: frida/build/
+      - name: Build Frida + Florida
+        run: |
+          export ANDROID_NDK="/usr/local/lib/android/sdk/ndk/29.0.14206865"
+          FRIDA_VERSION="17.9.10"
+          git clone --recurse-submodules https://github.com/frida/frida -b "${FRIDA_VERSION}"; cd frida
+          FRIDA_PREFIX="$(tr -cd 'a-z0-9' </dev/urandom | head -c32)"
+          for k in strongR-frida florida rycoh99; do for i in "../${k}/"*; do pushd "subprojects/${i##*/}"; for j in "../../../${k}/${i##*/}/"*.patch; do FRIDA_PREFIX="${FRIDA_PREFIX}" envsubst <"${j}" | patch -Np1; done; popd; done; done
+          ./configure --prefix="${PWD}/build" --host="${{ matrix.os }}-${{ matrix.arch }}" --enable-server --enable-gadget
+          make
+
+      - name: Upload frida-server
+        uses: actions/upload-artifact@v5
+        with:
+          name: florida-server-${{ matrix.arch }}
+          path: frida/build/subprojects/frida-core/server/frida-server
