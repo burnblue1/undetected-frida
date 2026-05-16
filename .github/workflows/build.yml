@@ -1,37 +1,65 @@
-name: Build Florida
+name: undetected-frida
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
-        arch: [x86_64, arm64]
-        os: [android]
+        arch:
+        - x86_64
+        - arm64
+        os:
+        - android
 
     steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: true
+    - uses: actions/checkout@v5
+      with:
+        submodules: true
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
+    - name: Node 18 setup
+      uses: actions/setup-node@v5
+      with:
+        node-version: 18
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32z-dev flex bison xz-utils
+    - name: JDK 8 setup
+      uses: actions/setup-java@v5
+      with:
+        java-version: "8"
+        distribution: temurin
 
-      - name: Build Undetected Frida (Florida)
-        run: |
-          ./configure --host=${{ matrix.os }}-${{ matrix.arch }} --enable-server
-          make
+    - name: Python 3.14 setup
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.14'
 
-      - name: Upload frida-server
-        uses: actions/upload-artifact@v5
-        with:
-          name: florida-server-${{ matrix.arch }}
-          path: build/subprojects/frida-core/server/frida-server
+    - name: Install dependencies
+      run: |
+        [ $(id -u) -eq 0 ] || SUDO=sudo
+        ${SUDO} apt-get update && DEBIAN_FRONTEND=noninteractive ${SUDO} apt-get install -y build-essential ninja-build gcc-multilib g++-multilib lib32stdc++-9-dev flex bison libc6-dev libc6-dev-i386 xz-utils plzip zstd pigz gettext-base
+        ${SUDO} /opt/hosttoolcache/Python/3.11.*/x64/bin/pip3 install -U setuptools lief
+
+    - name: Build Frida
+      run: |
+        FRIDA_VERSION="17.9.10"
+        git clone --recurse-submodules https://github.com/frida/frida -b "${FRIDA_VERSION}"
+        cd frida
+        FRIDA_PREFIX="$(tr -cd 'a-z0-9' </dev/urandom | head -c32)"
+        for k in ../strongR-frida ../florida ../rycoh99; do
+          for i in ${k}/*; do
+            pushd subprojects/${i##*/}
+            for j in ${i}/*.patch; do
+              FRIDA_PREFIX="${FRIDA_PREFIX}" envsubst <"${j}" | patch -Np1
+            done
+            popd
+          done
+        done
+        ./configure --prefix="${PWD}/build" --host="${{ matrix.os }}-${{ matrix.arch }}" --enable-server
+        make
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v5
+      with:
+        name: frida-server-${{ matrix.arch }}
+        path: frida/build/subprojects/frida-core/server/frida-server
